@@ -53,11 +53,20 @@ data class DeviceStatus(val developer: Boolean?, val adb: Boolean?, val wifiAdb:
 data class QuickApp(val packageName: String, val label: String)
 data class AccessService(val component: String, val app: String, val service: String)
 
-private fun accessTargetGroup(item: AccessService): String? = when {
-    item.component.startsWith("moe.shizuku.privileged.api/") || item.app.equals("Shizuku-Next", true) -> "Shizuku-Next"
-    item.app.equals("TogglDev", true) || item.app.equals("ToggleDev", true) -> "TogglDev"
-    item.app.equals("Tooler", true) -> "Tooler"
-    else -> null
+private val targetGroups = listOf("SD Maid (AppCleaner) - ADB/Root Toolbox", "Shizuku-Next", "TogglDev", "Tooler")
+private fun accessTargetGroup(item: AccessService): String? {
+    // Android pode mostrar o nome do serviço, e não o do app, na tela de acessibilidade.
+    // Uma correspondência exata evita desligar outros serviços do SD Maid SE.
+    fun matches(vararg names: String) = names.any { name ->
+        item.app.trim().equals(name, true) || item.service.trim().equals(name, true)
+    }
+    return when {
+        matches("SD Maid (AppCleaner) - ADB/Root Toolbox", "SD Maid (AppCleaner) – ADB/Root Toolbox") -> targetGroups[0]
+        item.component.startsWith("moe.shizuku.privileged.api/") || matches("Shizuku-Next") -> "Shizuku-Next"
+        matches("TogglDev", "ToggleDev") -> "TogglDev"
+        matches("Tooler") -> "Tooler"
+        else -> null
+    }
 }
 private fun targetAccessServices(services: List<AccessService>?): List<AccessService> =
     services?.filter { accessTargetGroup(it) != null } ?: emptyList()
@@ -221,7 +230,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     private fun changeAccessibility(shell: ShellSettings, selected: List<AccessService>): String {
-        if (selected.isEmpty()) return "Acessibilidade: nenhum dos três serviços foi identificado. Confira-os manualmente nas configurações."
+        if (selected.isEmpty()) return "Acessibilidade: nenhum dos serviços selecionados foi identificado. Confira-os manualmente nas configurações."
         val targets = selected.map { it.component }.toSet()
         val raw = shell.readAccessibility()
         fun components(value: String): List<String>? {
@@ -238,18 +247,18 @@ class MainActivity : ComponentActivity() {
         if (shell.readAccessibility() != raw) return "Acessibilidade: a lista mudou durante a verificação; nada foi alterado. Confira manualmente."
         val remaining = before.filterNot { canonical(it) in targets }.joinToString(":")
         val written = shell.writeAccessibility(remaining)
-        if (written.startsWith("ERROR:")) return "Acessibilidade: o Android não confirmou a alteração. O resultado pode ser parcial ou incerto; confira nas configurações."
+        if (written.startsWith("ERROR:")) return "Acessibilidade: o Android não confirmou a alteração. O resultado pode ser parcial ou incerto; confira nas configurações. Detalhe: ${written.take(180)}"
         val after = components(shell.readAccessibility())
         if (after == null || after.mapNotNull { canonical(it) }.toSet() != remaining.split(":").filter { it.isNotEmpty() }.mapNotNull { canonical(it) }.toSet())
             return "Acessibilidade: resultado não confirmado. Confira cada serviço nas configurações."
         val found = selected.mapNotNull { accessTargetGroup(it) }.toSet()
-        val missing = listOf("Shizuku-Next", "TogglDev", "Tooler").filterNot { it in found }
+        val missing = targetGroups.filterNot { it in found }
         return "Acessibilidade: os serviços identificados foram removidos da lista de configurações; confira a tela do Android." +
             if (missing.isNotEmpty()) " Não identificados: ${missing.joinToString()}; confira-os manualmente." else ""
     }
     private fun checkShizuku(): Boolean {
         try {
-            if (!Shizuku.pingBinder()) { message = "Shizuku não detectado. Inicie-o e tente novamente, ou use as configurações do Android."; return false }
+            if (!Shizuku.pingBinder()) { message = "Shizuku-Next não está conectado. Inicie o serviço no Shizuku-Next, autorize Poco Control e tente de novo. Se necessário, desative os serviços nas configurações do Android."; return false }
             if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
                 if (Shizuku.shouldShowRequestPermissionRationale()) message = "Autorize o POCO CONTROL no Shizuku e tente novamente."
                 else { Shizuku.requestPermission(31); message = "Autorize o Shizuku e tente a ação novamente." }
@@ -362,7 +371,7 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
     accessDialog: Boolean, onShowAccess: () -> Unit, onCloseAccess: () -> Unit, onDisableAccess: (List<AccessService>) -> Unit,
     confirmMode: String?, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     val dev = listOf(status.developer, status.adb, status.wifiAdb)
-    val banner = when { dev.any { it == true } -> "Configurações ativas"; dev.any { it == null } -> "Verificação incompleta"; else -> "Opções verificadas: desativadas" }
+    val banner = when { dev.any { it == true } -> "Desenvolvedor ou depuração: ativo"; dev.any { it == null } -> "Verificação incompleta"; else -> "Desenvolvedor e depuração: desativados" }
     MaterialTheme(colorScheme = darkColorScheme(primary = BrightBlue, secondary = BrightGreen, background = Background, surface = Panel)) {
         Column(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF092C63), Background, Color(0xFF020B1C))))
             .windowInsetsPadding(WindowInsets.safeDrawing).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 20.dp),
@@ -377,11 +386,11 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
             Surface(shape = RoundedCornerShape(18.dp), color = Color(0xFF083B31), modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFF26C97C), RoundedCornerShape(18.dp))) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.VerifiedUser, null, tint = BrightGreen, modifier = Modifier.size(34.dp)); Spacer(Modifier.width(12.dp))
-                    Column { Text(banner, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold); Text("Cada aplicativo pode aplicar suas próprias verificações.", color = TextMuted, fontSize = 13.sp, lineHeight = 18.sp) }
+                    Column { Text(banner, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold); Text("Acessibilidade é verificada separadamente. Cada aplicativo pode aplicar suas próprias verificações.", color = TextMuted, fontSize = 13.sp, lineHeight = 18.sp) }
                 }
             }
             Text("MODOS DE ACESSO", color = Color(0xFF9AD8FF), fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 1.sp)
-            ModeCard("Poco Control", "Tenta desativar desenvolvedor, depuração e os três serviços de acessibilidade identificados.", Icons.Default.Security, listOf(Color(0xFF07883D), Color(0xFF055C37)), "DESATIVAR OPÇÕES", !busy, onBank)
+            ModeCard("Poco Control", "Tenta desativar desenvolvedor, depuração e os serviços identificados dos quatro aplicativos selecionados.", Icons.Default.Security, listOf(Color(0xFF07883D), Color(0xFF055C37)), "DESATIVAR OPÇÕES", !busy, onBank)
             ModeCard("Modo normal", "Tenta restaurar os três valores salvos pelo Poco Control.", Icons.Default.Settings, listOf(Color(0xFF086ADF), Color(0xFF084497)), "RESTAURAR VALORES", !busy, onNormal)
             Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF0E3157), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp)) {
@@ -402,7 +411,7 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
                     StatusRow("Depuração sem fio", status.wifiAdb,
                         "Permite comandos de desenvolvimento pela rede. Desativá-la pode interromper a conexão usada para iniciar o Shizuku; reativá-lo pode exigir ações manuais.")
                     StatusRow("Acessibilidade", status.accessibility,
-                        "Serviços de acessibilidade podem apoiar leitores de tela, controle por voz e outras funções. Ativo não significa inseguro. O Poco Control tenta desativar somente os serviços identificados de Shizuku-Next, TogglDev e Tooler após confirmação.", isAccessibility = true)
+                        "Serviços de acessibilidade podem apoiar leitores de tela, controle por voz e outras funções. Ativo não significa inseguro. O Poco Control tenta desativar somente os serviços identificados de SD Maid (AppCleaner), Shizuku-Next, TogglDev e Tooler após confirmação.", isAccessibility = true)
                     StatusRow("VPN na rede padrão", status.defaultVpn,
                         "Mostra apenas se o Android identifica uma VPN na rede usada pelo aplicativo. Não verifica todas as redes, perfis de VPN ou aplicativos que alteram localização. Indisponível pode significar ausência de rede ou leitura sem resultado.")
                 }
@@ -452,7 +461,7 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
                         accessibilityServices.isEmpty() -> Text("O Android não retornou nomes de serviços ativos. Confira nas configurações; esta lista pode ser incompleta.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
                         else -> accessibilityServices.forEach { Text("• ${it.app} — ${it.service}", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp) }
                     }
-                    Text("O Poco Control tenta desativar somente os serviços identificados de Shizuku-Next, TogglDev e Tooler. A opção abaixo permite escolher separadamente. Confira sempre nas configurações.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
+                    Text("O Poco Control tenta desativar somente os serviços identificados de SD Maid (AppCleaner), Shizuku-Next, TogglDev e Tooler. A opção abaixo permite escolher separadamente. Confira sempre nas configurações.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
                     OutlinedButton(onClick = onShowAccess, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Escolher serviços para desativar") }
                     Text("Para reativar, use as configurações do Android; o modo normal não restaura serviços de acessibilidade.", color = TextMuted, fontSize = 12.sp, lineHeight = 18.sp)
                     Text("Não desligue serviços essenciais, como leitores de tela, sem uma alternativa para usar o aparelho.", color = Amber, fontSize = 12.sp, lineHeight = 18.sp)
@@ -482,22 +491,26 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
             val bank = confirmMode == "banco"
             val selectedServices = if (bank) targetAccessServices(accessibilityServices) else emptyList()
             val foundGroups = selectedServices.mapNotNull { accessTargetGroup(it) }.toSet()
-            val missingGroups = listOf("Shizuku-Next", "TogglDev", "Tooler").filterNot { it in foundGroups }
+            val missingGroups = targetGroups.filterNot { it in foundGroups }
             AlertDialog(onDismissRequest = onDismiss,
                 title = { Text(if (bank) "Ativar Poco Control?" else "Restaurar valores?") },
                 text = {
                     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (bank) {
-                            Text("O app tentará desativar os serviços identificados abaixo e depois as opções de desenvolvedor, depuração USB e sem fio. Apenas serviços destes três aplicativos serão incluídos:", fontSize = 14.sp, lineHeight = 20.sp)
-                            if (selectedServices.isEmpty()) Text("Nenhum dos três serviços foi identificado; confira-os manualmente.", color = Amber, fontSize = 13.sp)
+                            Text("O app tentará desativar os serviços identificados abaixo e depois as opções de desenvolvedor, depuração USB e sem fio. Apenas serviços identificados dos quatro aplicativos selecionados serão incluídos:", fontSize = 14.sp, lineHeight = 20.sp)
+                            if (selectedServices.isEmpty()) Text("Nenhum serviço selecionado foi identificado; confira-os manualmente.", color = Amber, fontSize = 13.sp)
                             else selectedServices.forEach { Text("• ${it.app} — ${it.service}\n${it.component}", color = TextMuted, fontSize = 12.sp, lineHeight = 17.sp) }
                             if (missingGroups.isNotEmpty()) Text("Não identificados: ${missingGroups.joinToString()}. Isso não confirma que estejam desativados; confira manualmente.", color = Amber, fontSize = 12.sp, lineHeight = 18.sp)
+                            if (!ready) Text("Shizuku-Next está desconectado ou sem autorização. Nenhuma alteração automática será feita até que ele esteja ativo e autorize o Poco Control. Você também pode desativar os serviços manualmente.", color = Amber, fontSize = 13.sp, lineHeight = 19.sp)
                             Text("Outros serviços não são selecionados. O Shizuku pode parar durante a operação, deixando alterações parciais. O modo normal não reativa serviços de acessibilidade; reative-os manualmente se precisar. Outras opções de desenvolvedor também podem mudar e não serão restauradas. Sem garantia de acesso aos bancos.", color = Amber, fontSize = 12.sp, lineHeight = 18.sp)
                         } else Text("O app tentará restaurar somente os três valores salvos antes do Poco Control. O Shizuku precisa estar ativo e autorizado. A depuração pode reduzir a segurança. Serviços de acessibilidade não são restaurados; reative-os nas configurações do Android.")
                     }
                 },
                 confirmButton = { TextButton(onClick = { onConfirm(confirmMode) }) { Text(if (bank) "Tentar desativar" else "Restaurar") } },
-                dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } })
+                dismissButton = { Row {
+                    if (bank) TextButton(onClick = { onDismiss(); onSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS) }) { Text("Abrir acessibilidade") }
+                    TextButton(onClick = onDismiss) { Text("Cancelar") }
+                } })
         }
     }
 }
@@ -510,7 +523,7 @@ private fun AccessibilityPicker(services: List<AccessService>?, onClose: () -> U
     AlertDialog(onDismissRequest = onClose, title = { Text("Desativar serviços escolhidos") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Selecione somente Shizuku-Next, TogglDev e Tooler que deseja desativar. Confira o nome e o serviço de cada item.", fontSize = 13.sp, lineHeight = 19.sp)
+                Text("Selecione somente SD Maid (AppCleaner), Shizuku-Next, TogglDev e Tooler que deseja desativar. Confira o nome e o serviço de cada item.", fontSize = 13.sp, lineHeight = 19.sp)
                 if (matches.isEmpty()) Text("Nenhum desses serviços foi identificado como ativo. Confira ou desative-os nas configurações do Android.", color = Amber, fontSize = 13.sp)
                 else LazyColumn(Modifier.fillMaxWidth().heightIn(max = 250.dp)) {
                     items(matches, key = { it.component }) { item ->

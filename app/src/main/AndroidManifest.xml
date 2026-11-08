@@ -6,6 +6,8 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- Visibilidade para identificar rótulos dos serviços de acessibilidade. -->
+        <intent><action android:name="android.accessibilityservice.AccessibilityService" /></intent>
         <package android:name="moe.shizuku.privileged.api" />
         <package android:name="br.gov.br" />
         <package android:name="br.gov.caixa.tem" />
