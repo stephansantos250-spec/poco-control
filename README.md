@@ -1,13 +1,13 @@
-# POCO CONTROL — 2.1 experimental
+# POCO CONTROL — 2.2 experimental
 
 Aplicativo Android experimental, não afiliado à CAIXA, Xiaomi ou Gov.br. Não garante acesso a aplicativos bancários. Não testado em aparelho físico.
 
 ## Download
 
-[Baixe a versao 2.1 experimental](https://github.com/stephansantos250-spec/poco-control/releases/tag/v2.1.0-experimental).
+[Baixe a versao 2.2 experimental](https://github.com/stephansantos250-spec/poco-control/releases/tag/v2.2.0-experimental).
 
-## Modo banco e acessibilidade
-O modo banco mostra os serviços ativos identificados de Shizuku-Next, TogglDev/ToggleDev e Tooler. Após confirmação, tenta removê-los da lista real de serviços ativos por meio do Shizuku, preservando os demais serviços lidos, e em seguida tenta desativar desenvolvedor, depuração USB e sem fio. A identificação depende dos nomes informados pelo Android e pode ser incompleta; nomes ausentes não são considerados desativados. Confira os resultados nas configurações oficiais.
+## Poco Control e acessibilidade
+O Poco Control mostra os serviços ativos identificados de Shizuku-Next, TogglDev/ToggleDev e Tooler. Após confirmação, tenta removê-los da lista real de serviços ativos por meio do Shizuku, preservando os demais serviços lidos, e em seguida tenta desativar desenvolvedor, depuração USB e sem fio. A identificação depende dos nomes informados pelo Android e pode ser incompleta; nomes ausentes não são considerados desativados. Confira os resultados nas configurações oficiais.
 
 O Android pode restringir a alteração ou o Shizuku pode parar, deixando o resultado incerto ou parcial. O modo normal tenta restaurar somente os três valores de desenvolvedor/depuração salvos; ele não restaura serviços de acessibilidade. Reative-os manualmente nas configurações do Android, se precisar. A opção separada em Ferramentas permite escolher serviços manualmente. Nunca desative recursos essenciais sem alternativa de acessibilidade.
 

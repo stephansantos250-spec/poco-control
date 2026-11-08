@@ -381,8 +381,8 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
                 }
             }
             Text("MODOS DE ACESSO", color = Color(0xFF9AD8FF), fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 1.sp)
-            ModeCard("Modo banco", "Tenta desativar desenvolvedor, depuração e os três serviços de acessibilidade identificados.", Icons.Default.AccountBalance, listOf(Color(0xFF07883D), Color(0xFF055C37)), "DESATIVAR OPÇÕES", !busy, onBank)
-            ModeCard("Modo normal", "Tenta restaurar os três valores salvos pelo modo banco.", Icons.Default.Settings, listOf(Color(0xFF086ADF), Color(0xFF084497)), "RESTAURAR VALORES", !busy, onNormal)
+            ModeCard("Poco Control", "Tenta desativar desenvolvedor, depuração e os três serviços de acessibilidade identificados.", Icons.Default.Security, listOf(Color(0xFF07883D), Color(0xFF055C37)), "DESATIVAR OPÇÕES", !busy, onBank)
+            ModeCard("Modo normal", "Tenta restaurar os três valores salvos pelo Poco Control.", Icons.Default.Settings, listOf(Color(0xFF086ADF), Color(0xFF084497)), "RESTAURAR VALORES", !busy, onNormal)
             Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF0E3157), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp)) {
                     Text(if (ready) "● Shizuku autorizado · teste a conexão" else "○ Shizuku não conectado ou sem permissão", color = if (ready) BrightGreen else Amber, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
@@ -402,7 +402,7 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
                     StatusRow("Depuração sem fio", status.wifiAdb,
                         "Permite comandos de desenvolvimento pela rede. Desativá-la pode interromper a conexão usada para iniciar o Shizuku; reativá-lo pode exigir ações manuais.")
                     StatusRow("Acessibilidade", status.accessibility,
-                        "Serviços de acessibilidade podem apoiar leitores de tela, controle por voz e outras funções. Ativo não significa inseguro. O modo banco tenta desativar somente os serviços identificados de Shizuku-Next, TogglDev e Tooler após confirmação.", isAccessibility = true)
+                        "Serviços de acessibilidade podem apoiar leitores de tela, controle por voz e outras funções. Ativo não significa inseguro. O Poco Control tenta desativar somente os serviços identificados de Shizuku-Next, TogglDev e Tooler após confirmação.", isAccessibility = true)
                     StatusRow("VPN na rede padrão", status.defaultVpn,
                         "Mostra apenas se o Android identifica uma VPN na rede usada pelo aplicativo. Não verifica todas as redes, perfis de VPN ou aplicativos que alteram localização. Indisponível pode significar ausência de rede ou leitura sem resultado.")
                 }
@@ -452,7 +452,7 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
                         accessibilityServices.isEmpty() -> Text("O Android não retornou nomes de serviços ativos. Confira nas configurações; esta lista pode ser incompleta.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
                         else -> accessibilityServices.forEach { Text("• ${it.app} — ${it.service}", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp) }
                     }
-                    Text("O modo banco tenta desativar somente os serviços identificados de Shizuku-Next, TogglDev e Tooler. A opção abaixo permite escolher separadamente. Confira sempre nas configurações.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
+                    Text("O Poco Control tenta desativar somente os serviços identificados de Shizuku-Next, TogglDev e Tooler. A opção abaixo permite escolher separadamente. Confira sempre nas configurações.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
                     OutlinedButton(onClick = onShowAccess, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Escolher serviços para desativar") }
                     Text("Para reativar, use as configurações do Android; o modo normal não restaura serviços de acessibilidade.", color = TextMuted, fontSize = 12.sp, lineHeight = 18.sp)
                     Text("Não desligue serviços essenciais, como leitores de tela, sem uma alternativa para usar o aparelho.", color = Amber, fontSize = 12.sp, lineHeight = 18.sp)
@@ -484,7 +484,7 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
             val foundGroups = selectedServices.mapNotNull { accessTargetGroup(it) }.toSet()
             val missingGroups = listOf("Shizuku-Next", "TogglDev", "Tooler").filterNot { it in foundGroups }
             AlertDialog(onDismissRequest = onDismiss,
-                title = { Text(if (bank) "Ativar modo banco?" else "Restaurar valores?") },
+                title = { Text(if (bank) "Ativar Poco Control?" else "Restaurar valores?") },
                 text = {
                     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (bank) {
@@ -493,7 +493,7 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
                             else selectedServices.forEach { Text("• ${it.app} — ${it.service}\n${it.component}", color = TextMuted, fontSize = 12.sp, lineHeight = 17.sp) }
                             if (missingGroups.isNotEmpty()) Text("Não identificados: ${missingGroups.joinToString()}. Isso não confirma que estejam desativados; confira manualmente.", color = Amber, fontSize = 12.sp, lineHeight = 18.sp)
                             Text("Outros serviços não são selecionados. O Shizuku pode parar durante a operação, deixando alterações parciais. O modo normal não reativa serviços de acessibilidade; reative-os manualmente se precisar. Outras opções de desenvolvedor também podem mudar e não serão restauradas. Sem garantia de acesso aos bancos.", color = Amber, fontSize = 12.sp, lineHeight = 18.sp)
-                        } else Text("O app tentará restaurar somente os três valores salvos antes do modo banco. O Shizuku precisa estar ativo e autorizado. A depuração pode reduzir a segurança. Serviços de acessibilidade não são restaurados; reative-os nas configurações do Android.")
+                        } else Text("O app tentará restaurar somente os três valores salvos antes do Poco Control. O Shizuku precisa estar ativo e autorizado. A depuração pode reduzir a segurança. Serviços de acessibilidade não são restaurados; reative-os nas configurações do Android.")
                     }
                 },
                 confirmButton = { TextButton(onClick = { onConfirm(confirmMode) }) { Text(if (bank) "Tentar desativar" else "Restaurar") } },
