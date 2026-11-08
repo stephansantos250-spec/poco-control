@@ -53,6 +53,15 @@ data class DeviceStatus(val developer: Boolean?, val adb: Boolean?, val wifiAdb:
 data class QuickApp(val packageName: String, val label: String)
 data class AccessService(val component: String, val app: String, val service: String)
 
+private fun accessTargetGroup(item: AccessService): String? = when {
+    item.component.startsWith("moe.shizuku.privileged.api/") || item.app.equals("Shizuku-Next", true) -> "Shizuku-Next"
+    item.app.equals("TogglDev", true) || item.app.equals("ToggleDev", true) -> "TogglDev"
+    item.app.equals("Tooler", true) -> "Tooler"
+    else -> null
+}
+private fun targetAccessServices(services: List<AccessService>?): List<AccessService> =
+    services?.filter { accessTargetGroup(it) != null } ?: emptyList()
+
 class MainActivity : ComponentActivity() {
     private var status by mutableStateOf(DeviceStatus(null, null, null, null, null))
     private var message by mutableStateOf("Conecte o Shizuku para usar os modos automáticos.")
@@ -87,7 +96,7 @@ class MainActivity : ComponentActivity() {
         refreshStatus(); updateConnection(); loadShortcuts()
         setContent {
             PocoScreen(status, message, shizukuReady, busy, connectionDescription, lastTarget, accessibilityServices,
-                onBank = { confirmMode = "banco" }, onNormal = { confirmMode = "normal" },
+                onBank = { refreshStatus(); confirmMode = "banco" }, onNormal = { confirmMode = "normal" },
                 onRefresh = { refreshStatus(); updateConnection() },
                 onTest = { runOperation("teste") },
                 onSettings = { openSettings(it) }, onLaunch = { pkg, label -> launchApp(pkg, label) },
@@ -98,7 +107,7 @@ class MainActivity : ComponentActivity() {
                 accessDialog = accessDialog, onShowAccess = { refreshStatus(); accessDialog = true },
                 onCloseAccess = { accessDialog = false }, onDisableAccess = { selected -> accessDialog = false; disableSelectedAccessibility(selected) },
                 confirmMode = confirmMode, onDismiss = { confirmMode = null },
-                onConfirm = { mode -> confirmMode = null; runOperation(mode) })
+                onConfirm = { mode -> confirmMode = null; runOperation(mode, if (mode == "banco") targetAccessServices(accessibilityServices) else emptyList()) })
         }
     }
     override fun onResume() { super.onResume(); refreshStatus(); updateConnection() }
@@ -211,61 +220,56 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    private fun disableSelectedAccessibility(selected: List<AccessService>) {
-        if (busy || selected.isEmpty()) return
+    private fun changeAccessibility(shell: ShellSettings, selected: List<AccessService>): String {
+        if (selected.isEmpty()) return "Acessibilidade: nenhum dos três serviços foi identificado. Confira-os manualmente nas configurações."
+        val targets = selected.map { it.component }.toSet()
+        val raw = shell.readAccessibility()
+        fun components(value: String): List<String>? {
+            if (value.startsWith("ERROR:")) return null
+            if (value == "null" || value.isEmpty()) return emptyList()
+            val parts = value.split(":")
+            return if (parts.any { ComponentName.unflattenFromString(it) == null }) null else parts
+        }
+        fun canonical(value: String): String? = ComponentName.unflattenFromString(value)?.flattenToString()
+        val before = components(raw)
+        if (before == null) return "Acessibilidade: lista indisponível; não foi solicitada alteração. Confira manualmente."
+        if (targets.any { target -> before.none { canonical(it) == target } })
+            return "Acessibilidade: a lista mudou; nenhuma alteração foi solicitada. Atualize e confira manualmente."
+        if (shell.readAccessibility() != raw) return "Acessibilidade: a lista mudou durante a verificação; nada foi alterado. Confira manualmente."
+        val remaining = before.filterNot { canonical(it) in targets }.joinToString(":")
+        val written = shell.writeAccessibility(remaining)
+        if (written.startsWith("ERROR:")) return "Acessibilidade: o Android não confirmou a alteração. O resultado pode ser parcial ou incerto; confira nas configurações."
+        val after = components(shell.readAccessibility())
+        if (after == null || after.mapNotNull { canonical(it) }.toSet() != remaining.split(":").filter { it.isNotEmpty() }.mapNotNull { canonical(it) }.toSet())
+            return "Acessibilidade: resultado não confirmado. Confira cada serviço nas configurações."
+        val found = selected.mapNotNull { accessTargetGroup(it) }.toSet()
+        val missing = listOf("Shizuku-Next", "TogglDev", "Tooler").filterNot { it in found }
+        return "Acessibilidade: os serviços identificados foram removidos da lista de configurações; confira a tela do Android." +
+            if (missing.isNotEmpty()) " Não identificados: ${missing.joinToString()}; confira-os manualmente." else ""
+    }
+    private fun checkShizuku(): Boolean {
         try {
-            if (!Shizuku.pingBinder()) { message = "Shizuku não detectado. Inicie-o e escolha os serviços novamente, ou use as configurações do Android."; return }
+            if (!Shizuku.pingBinder()) { message = "Shizuku não detectado. Inicie-o e tente novamente, ou use as configurações do Android."; return false }
             if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-                if (Shizuku.shouldShowRequestPermissionRationale()) message = "Autorize o POCO CONTROL no Shizuku e escolha os serviços novamente."
-                else { Shizuku.requestPermission(31); message = "Autorize o Shizuku e escolha os serviços novamente." }
-                return
+                if (Shizuku.shouldShowRequestPermissionRationale()) message = "Autorize o POCO CONTROL no Shizuku e tente novamente."
+                else { Shizuku.requestPermission(31); message = "Autorize o Shizuku e tente a ação novamente." }
+                return false
             }
-        } catch (_: Exception) { message = "Não foi possível acessar o Shizuku. Confira os serviços nas configurações."; return }
+            return true
+        } catch (_: Exception) { message = "Não foi possível acessar o Shizuku. Confira as configurações do Android."; return false }
+    }
+    private fun disableSelectedAccessibility(selected: List<AccessService>) {
+        if (busy || selected.isEmpty() || !checkShizuku()) return
         busy = true
         message = "Tentando desativar somente os serviços escolhidos..."
-        val targets = selected.map { it.component }.toSet()
         executor.execute {
-            val result = try {
-                val shell = ShellSettings()
-                val raw = shell.readAccessibility()
-                fun components(value: String): List<String>? {
-                    if (value.startsWith("ERROR:")) return null
-                    if (value == "null" || value.isEmpty()) return emptyList()
-                    val parts = value.split(":")
-                    return if (parts.any { ComponentName.unflattenFromString(it) == null }) null else parts
-                }
-                fun canonical(value: String): String? = ComponentName.unflattenFromString(value)?.flattenToString()
-                val before = components(raw)
-                if (before == null) "Não foi possível ler a lista de acessibilidade. Nenhuma alteração foi solicitada."
-                else if (targets.any { target -> before.none { canonical(it) == target } })
-                    "Um serviço escolhido não consta na configuração atual. Nada foi alterado; atualize a verificação e confira nas configurações."
-                else if (shell.readAccessibility() != raw)
-                    "A lista mudou durante a verificação. Nada foi alterado; atualize e tente novamente."
-                else {
-                    val remaining = before.filterNot { canonical(it) in targets }.joinToString(":")
-                    val written = shell.writeAccessibility(remaining)
-                    if (written.startsWith("ERROR:")) "O Android não confirmou a alteração. Confira os serviços nas configurações; a alteração pode ter sido parcial ou incerta."
-                    else {
-                        val after = components(shell.readAccessibility())
-                        if (after == null || after.mapNotNull { canonical(it) }.toSet() != remaining.split(":").filter { it.isNotEmpty() }.mapNotNull { canonical(it) }.toSet())
-                            "Não foi possível confirmar o resultado. Confira cada serviço nas configurações oficiais."
-                        else "A lista de configurações não contém os serviços escolhidos. Confira também a tela de acessibilidade do Android; outros serviços foram mantidos na lista lida."
-                    }
-                }
-            } catch (_: Exception) { "A conexão foi interrompida. O resultado é incerto; confira cada serviço nas configurações do Android." }
+            val result = try { changeAccessibility(ShellSettings(), selected) }
+                catch (_: Exception) { "Acessibilidade: conexão interrompida; resultado incerto. Confira cada serviço nas configurações." }
             main.post { if (!isDestroyed) { busy = false; message = result; refreshStatus(); updateConnection() } }
         }
     }
-    private fun runOperation(mode: String) {
-        if (busy) return
-        try {
-            if (!Shizuku.pingBinder()) { message = "O serviço Shizuku Next não foi detectado pelo app. Confira se está iniciado e tente novamente."; return }
-            if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-                if (Shizuku.shouldShowRequestPermissionRationale()) message = "Autorize o POCO CONTROL na lista de aplicativos do Shizuku Next."
-                else { Shizuku.requestPermission(31); message = "Autorize o acesso no Shizuku Next; depois toque novamente." }
-                return
-            }
-        } catch (_: Exception) { message = "Não foi possível acessar o Shizuku Next. Confira se está ativo."; return }
+    private fun runOperation(mode: String, accessTargets: List<AccessService> = emptyList()) {
+        if (busy || !checkShizuku()) return
         if (mode == "normal" && !prefs.contains("snapshot")) { message = "Não há configuração anterior salva. Use as configurações oficiais para escolher o estado desejado."; return }
         if (mode == "banco") lastTarget = listOf("0", "0", "0")
         else if (mode == "normal") lastTarget = (prefs.getString("snapshot", "") ?: "").split(",")
@@ -279,7 +283,13 @@ class MainActivity : ComponentActivity() {
                     if (values.size == 3 && values.all { it in setOf("0", "1", "null") })
                         "Teste de leitura concluído: Shizuku Next respondeu. Nenhuma configuração foi alterada. A permissão de escrita ainda não foi testada."
                     else "O Shizuku respondeu, mas não foi possível ler todas as opções. Nada foi alterado."
-                } else executeMode(shell, mode == "banco")
+                } else if (mode == "banco") {
+                    val accessibilityResult = try { changeAccessibility(shell, accessTargets) }
+                        catch (_: Exception) { "Acessibilidade: conexão interrompida; resultado incerto. Confira cada serviço nas configurações." }
+                    val settingsResult = try { executeMode(shell, true) }
+                        catch (_: Exception) { "Desenvolvedor e depuração: conexão interrompida ou operação incompleta. Confira as três opções no Android." }
+                    accessibilityResult + "\n\n" + settingsResult
+                } else executeMode(shell, false)
             } catch (e: Exception) {
                 if (mode == "teste") "Falha no teste de leitura. Confirme Shizuku Next ativo e autorizado. Nada foi alterado."
                 else "A operação foi interrompida; algumas opções podem ter mudado. Confira o estado no Android e reinicie o Shizuku Next se necessário."
@@ -309,7 +319,7 @@ class MainActivity : ComponentActivity() {
         val after = parsed(service.readAll())
         if (after != target) return "O Android não confirmou todos os valores. Confira as opções; o estado anterior continua salvo para nova tentativa."
         if (!bank && !prefs.edit().remove("snapshot").commit()) return "Valores conferidos, mas não foi possível limpar o estado salvo. Verifique antes de repetir."
-        return if (bank) "Modo banco: os três valores foram confirmados como desativados. A acessibilidade não foi alterada. Isso não garante acesso ao banco." else "Modo normal: os três valores salvos foram restaurados e conferidos. Outras opções não são restauradas."
+        return if (bank) "Desenvolvedor e depuração: os três valores foram confirmados como desativados. Isso não garante acesso ao banco." else "Modo normal: os três valores salvos foram restaurados e conferidos. Outras opções não são restauradas."
     }
 }
 
@@ -371,7 +381,7 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
                 }
             }
             Text("MODOS DE ACESSO", color = Color(0xFF9AD8FF), fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 1.sp)
-            ModeCard("Modo banco", "Tenta desativar as opções de desenvolvedor e depuração.", Icons.Default.AccountBalance, listOf(Color(0xFF07883D), Color(0xFF055C37)), "DESATIVAR OPÇÕES", !busy, onBank)
+            ModeCard("Modo banco", "Tenta desativar desenvolvedor, depuração e os três serviços de acessibilidade identificados.", Icons.Default.AccountBalance, listOf(Color(0xFF07883D), Color(0xFF055C37)), "DESATIVAR OPÇÕES", !busy, onBank)
             ModeCard("Modo normal", "Tenta restaurar os três valores salvos pelo modo banco.", Icons.Default.Settings, listOf(Color(0xFF086ADF), Color(0xFF084497)), "RESTAURAR VALORES", !busy, onNormal)
             Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF0E3157), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp)) {
@@ -392,7 +402,7 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
                     StatusRow("Depuração sem fio", status.wifiAdb,
                         "Permite comandos de desenvolvimento pela rede. Desativá-la pode interromper a conexão usada para iniciar o Shizuku; reativá-lo pode exigir ações manuais.")
                     StatusRow("Acessibilidade", status.accessibility,
-                        "Serviços de acessibilidade podem apoiar leitores de tela, controle por voz e outras funções. Ativo não significa inseguro. O modo banco não altera serviços. Use a opção separada de escolha ou as configurações oficiais.", isAccessibility = true)
+                        "Serviços de acessibilidade podem apoiar leitores de tela, controle por voz e outras funções. Ativo não significa inseguro. O modo banco tenta desativar somente os serviços identificados de Shizuku-Next, TogglDev e Tooler após confirmação.", isAccessibility = true)
                     StatusRow("VPN na rede padrão", status.defaultVpn,
                         "Mostra apenas se o Android identifica uma VPN na rede usada pelo aplicativo. Não verifica todas as redes, perfis de VPN ou aplicativos que alteram localização. Indisponível pode significar ausência de rede ou leitura sem resultado.")
                 }
@@ -442,7 +452,7 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
                         accessibilityServices.isEmpty() -> Text("O Android não retornou nomes de serviços ativos. Confira nas configurações; esta lista pode ser incompleta.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
                         else -> accessibilityServices.forEach { Text("• ${it.app} — ${it.service}", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp) }
                     }
-                    Text("O modo banco não altera acessibilidade. A opção abaixo tenta desativar apenas os serviços escolhidos, usando Shizuku. Você também pode gerenciá-los nas configurações.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
+                    Text("O modo banco tenta desativar somente os serviços identificados de Shizuku-Next, TogglDev e Tooler. A opção abaixo permite escolher separadamente. Confira sempre nas configurações.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
                     OutlinedButton(onClick = onShowAccess, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Escolher serviços para desativar") }
                     Text("Para reativar, use as configurações do Android; o modo normal não restaura serviços de acessibilidade.", color = TextMuted, fontSize = 12.sp, lineHeight = 18.sp)
                     Text("Não desligue serviços essenciais, como leitores de tela, sem uma alternativa para usar o aparelho.", color = Amber, fontSize = 12.sp, lineHeight = 18.sp)
@@ -470,11 +480,23 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
         }
         if (confirmMode != null) {
             val bank = confirmMode == "banco"
+            val selectedServices = if (bank) targetAccessServices(accessibilityServices) else emptyList()
+            val foundGroups = selectedServices.mapNotNull { accessTargetGroup(it) }.toSet()
+            val missingGroups = listOf("Shizuku-Next", "TogglDev", "Tooler").filterNot { it in foundGroups }
             AlertDialog(onDismissRequest = onDismiss,
-                title = { Text(if (bank) "Desativar opções?" else "Restaurar valores?") },
-                text = { Text(if (bank) "O app tentará desativar depuração sem fio, depuração USB e opções do desenvolvedor usando Shizuku, após salvar seus valores atuais. Desligar opções do desenvolvedor pode alterar outras configurações que não serão restauradas. O Shizuku pode parar; se isso acontecer, será necessário reativá-lo manualmente. A acessibilidade não é alterada; ela deve ser gerenciada separadamente. Não há garantia de acesso aos bancos."
-                    else "O app tentará restaurar somente os três valores salvos antes do modo banco. O Shizuku precisa estar ativo e autorizado. A depuração pode reduzir a segurança. Outras configurações e serviços não serão restaurados.") },
-                confirmButton = { TextButton(onClick = { onConfirm(confirmMode) }) { Text(if (bank) "Desativar" else "Restaurar") } },
+                title = { Text(if (bank) "Ativar modo banco?" else "Restaurar valores?") },
+                text = {
+                    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (bank) {
+                            Text("O app tentará desativar os serviços identificados abaixo e depois as opções de desenvolvedor, depuração USB e sem fio. Apenas serviços destes três aplicativos serão incluídos:", fontSize = 14.sp, lineHeight = 20.sp)
+                            if (selectedServices.isEmpty()) Text("Nenhum dos três serviços foi identificado; confira-os manualmente.", color = Amber, fontSize = 13.sp)
+                            else selectedServices.forEach { Text("• ${it.app} — ${it.service}\n${it.component}", color = TextMuted, fontSize = 12.sp, lineHeight = 17.sp) }
+                            if (missingGroups.isNotEmpty()) Text("Não identificados: ${missingGroups.joinToString()}. Isso não confirma que estejam desativados; confira manualmente.", color = Amber, fontSize = 12.sp, lineHeight = 18.sp)
+                            Text("Outros serviços não são selecionados. O Shizuku pode parar durante a operação, deixando alterações parciais. O modo normal não reativa serviços de acessibilidade; reative-os manualmente se precisar. Outras opções de desenvolvedor também podem mudar e não serão restauradas. Sem garantia de acesso aos bancos.", color = Amber, fontSize = 12.sp, lineHeight = 18.sp)
+                        } else Text("O app tentará restaurar somente os três valores salvos antes do modo banco. O Shizuku precisa estar ativo e autorizado. A depuração pode reduzir a segurança. Serviços de acessibilidade não são restaurados; reative-os nas configurações do Android.")
+                    }
+                },
+                confirmButton = { TextButton(onClick = { onConfirm(confirmMode) }) { Text(if (bank) "Tentar desativar" else "Restaurar") } },
                 dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } })
         }
     }
@@ -483,10 +505,7 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
 @Composable
 private fun AccessibilityPicker(services: List<AccessService>?, onClose: () -> Unit, onDisable: (List<AccessService>) -> Unit) {
     var chosen by remember { mutableStateOf(setOf<String>()) }
-    val matches = services?.filter {
-        it.component.startsWith("moe.shizuku.privileged.api/") ||
-            listOf("Shizuku-Next", "TogglDev", "ToggleDev", "Tooler").any { name -> it.app.equals(name, ignoreCase = true) }
-    } ?: emptyList()
+    val matches = targetAccessServices(services)
     val selected = matches.filter { it.component in chosen }
     AlertDialog(onDismissRequest = onClose, title = { Text("Desativar serviços escolhidos") },
         text = {

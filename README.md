@@ -1,31 +1,17 @@
-# POCO CONTROL — 2.0 experimental
+# POCO CONTROL — 2.1 experimental
 
-Aplicativo Android experimental, não afiliado à CAIXA, Xiaomi ou Gov.br. Não garante acesso a aplicativos bancários. As alterações de configurações dependem do Android e do Shizuku; o funcionamento não foi testado em um aparelho físico.
+Aplicativo Android experimental, não afiliado à CAIXA, Xiaomi ou Gov.br. Não garante acesso a aplicativos bancários. Não testado em aparelho físico.
 
 ## Download
 
-Baixe o APK e o código-fonte da [versão 2.0 experimental](https://github.com/stephansantos250-spec/poco-control/releases/tag/v2.0.0-experimental).
+[Baixe a versao 2.1 experimental](https://github.com/stephansantos250-spec/poco-control/releases/tag/v2.1.0-experimental).
 
-## Acessibilidade
-Em Ferramentas, **Escolher serviços para desativar** lista serviços ativos identificados como pertencentes a Shizuku-Next, TogglDev/ToggleDev e Tooler. Selecione apenas os serviços desejados e confirme. O app tenta remover só os componentes escolhidos da lista de acessibilidade do Android por meio do Shizuku, preservando os outros componentes lidos. O Android pode restringir a operação ou o Shizuku pode parar, deixando o resultado incerto; confirme cada serviço nas configurações. Se um serviço não aparecer, use as configurações oficiais. A lista pode ser incompleta.
+## Modo banco e acessibilidade
+O modo banco mostra os serviços ativos identificados de Shizuku-Next, TogglDev/ToggleDev e Tooler. Após confirmação, tenta removê-los da lista real de serviços ativos por meio do Shizuku, preservando os demais serviços lidos, e em seguida tenta desativar desenvolvedor, depuração USB e sem fio. A identificação depende dos nomes informados pelo Android e pode ser incompleta; nomes ausentes não são considerados desativados. Confira os resultados nas configurações oficiais.
 
-O modo banco não altera acessibilidade. O modo normal não reativa esses serviços: para reativar, use as configurações de acessibilidade do Android. Não desative serviços essenciais de acessibilidade sem uma alternativa para usar o aparelho.
+O Android pode restringir a alteração ou o Shizuku pode parar, deixando o resultado incerto ou parcial. O modo normal tenta restaurar somente os três valores de desenvolvedor/depuração salvos; ele não restaura serviços de acessibilidade. Reative-os manualmente nas configurações do Android, se precisar. A opção separada em Ferramentas permite escolher serviços manualmente. Nunca desative recursos essenciais sem alternativa de acessibilidade.
 
-## Modos e instalação
-O modo banco tenta desativar três configurações de desenvolvedor e depuração, guardando os valores para que o modo normal tente restaurá-los. Outras configurações não são restauradas. Desativar depuração pode interromper o Shizuku. A assinatura do APK 2.0 experimental é de teste e pode ser diferente da anterior; desinstalar o app apaga atalhos e os valores salvos. Anote ou restaure valores importantes antes de desinstalar.
+## Instalação e compilação
+Assinado com chave de teste. Se a assinatura for diferente da instalação anterior, será preciso desinstalá-la; isso apaga atalhos e os valores salvos para restauração. Anote ou restaure os valores antes de desinstalar. O aplicativo foi compilado, mas não foi testado em aparelho físico.
 
-## Compilação
-Abra o projeto no Android Studio com JDK 17 e Android SDK 35 e execute `assembleRelease`. A versão release usa uma chave de depuração local e não deve ser publicada em produção. O ZIP não contém chaves de assinatura.# POCO CONTROL — 2.0 experimental
-
-Aplicativo Android experimental, não afiliado à CAIXA, Xiaomi ou Gov.br. Não garante acesso a aplicativos bancários. As alterações de configurações dependem do Android e do Shizuku; o funcionamento não foi testado em um aparelho físico.
-
-## Acessibilidade
-Em Ferramentas, **Escolher serviços para desativar** lista serviços ativos identificados como pertencentes a Shizuku-Next, TogglDev/ToggleDev e Tooler. Selecione apenas os serviços desejados e confirme. O app tenta remover só os componentes escolhidos da lista de acessibilidade do Android por meio do Shizuku, preservando os outros componentes lidos. O Android pode restringir a operação ou o Shizuku pode parar, deixando o resultado incerto; confirme cada serviço nas configurações. Se um serviço não aparecer, use as configurações oficiais. A lista pode ser incompleta.
-
-O modo banco não altera acessibilidade. O modo normal não reativa esses serviços: para reativar, use as configurações de acessibilidade do Android. Não desative serviços essenciais de acessibilidade sem uma alternativa para usar o aparelho.
-
-## Modos e instalação
-O modo banco tenta desativar três configurações de desenvolvedor e depuração, guardando os valores para que o modo normal tente restaurá-los. Outras configurações não são restauradas. Desativar depuração pode interromper o Shizuku. A assinatura do APK 2.0 experimental é de teste e pode ser diferente da anterior; desinstalar o app apaga atalhos e os valores salvos. Anote ou restaure valores importantes antes de desinstalar.
-
-## Compilação
-Abra o projeto no Android Studio com JDK 17 e Android SDK 35 e execute `assembleRelease`. A versão release usa uma chave de depuração local e não deve ser publicada em produção. O ZIP não contém chaves de assinatura.
+Abra o projeto no Android Studio com JDK 17 e SDK 35. Sincronize dependências e execute `assembleRelease`. A configuração release usa chave de depuração local; não a use em produção. O ZIP não contém chaves de assinatura.
