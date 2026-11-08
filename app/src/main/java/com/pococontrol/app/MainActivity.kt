@@ -2,6 +2,7 @@ package com.pococontrol.app
 
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.view.accessibility.AccessibilityManager
+import android.content.ComponentName
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -50,13 +51,15 @@ private val Amber = Color(0xFFFFD47B)
 
 data class DeviceStatus(val developer: Boolean?, val adb: Boolean?, val wifiAdb: Boolean?, val accessibility: Boolean?, val defaultVpn: Boolean?)
 data class QuickApp(val packageName: String, val label: String)
+data class AccessService(val component: String, val app: String, val service: String)
 
 class MainActivity : ComponentActivity() {
     private var status by mutableStateOf(DeviceStatus(null, null, null, null, null))
     private var message by mutableStateOf("Conecte o Shizuku para usar os modos automáticos.")
     private var shizukuReady by mutableStateOf(false)
     private var connectionDescription by mutableStateOf("Verificação pendente")
-    private var accessibilityServices by mutableStateOf<List<String>?>(null)
+    private var accessibilityServices by mutableStateOf<List<AccessService>?>(null)
+    private var accessDialog by mutableStateOf(false)
     private var lastTarget by mutableStateOf<List<String>?>(null)
     private var busy by mutableStateOf(false)
     private var confirmMode by mutableStateOf<String?>(null)
@@ -92,6 +95,8 @@ class MainActivity : ComponentActivity() {
                 loadingApps = loadingApps, loadError = loadError,
                 onShowPicker = { loadInstalledApps() }, onClosePicker = { closePicker() },
                 onAddShortcut = { addShortcut(it) }, onRemoveShortcut = { removeShortcut(it) },
+                accessDialog = accessDialog, onShowAccess = { refreshStatus(); accessDialog = true },
+                onCloseAccess = { accessDialog = false }, onDisableAccess = { selected -> accessDialog = false; disableSelectedAccessibility(selected) },
                 confirmMode = confirmMode, onDismiss = { confirmMode = null },
                 onConfirm = { mode -> confirmMode = null; runOperation(mode) })
         }
@@ -133,12 +138,15 @@ class MainActivity : ComponentActivity() {
         status = DeviceStatus(g(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED), g(Settings.Global.ADB_ENABLED), g("adb_wifi_enabled"), a, vpn)
         accessibilityServices = try {
             val manager = getSystemService(AccessibilityManager::class.java)
-            manager?.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)?.map { info ->
-                val resolved = info.resolveInfo
-                val fallback = resolved?.serviceInfo?.packageName ?: "Serviço sem nome"
-                try { resolved?.loadLabel(packageManager)?.toString()?.takeIf { it.isNotBlank() } ?: fallback }
-                catch (_: Exception) { fallback }
-            }?.distinct()?.sorted()
+            manager?.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)?.mapNotNull { info ->
+                val resolved = info.resolveInfo ?: return@mapNotNull null
+                val serviceInfo = resolved.serviceInfo ?: return@mapNotNull null
+                val pkg = serviceInfo.packageName ?: return@mapNotNull null
+                val cls = serviceInfo.name ?: return@mapNotNull null
+                val appName = try { serviceInfo.applicationInfo.loadLabel(packageManager)?.toString() ?: pkg } catch (_: Exception) { pkg }
+                val label = try { resolved.loadLabel(packageManager)?.toString() ?: cls } catch (_: Exception) { cls }
+                AccessService(ComponentName(pkg, cls).flattenToString(), appName, label)
+            }?.distinctBy { it.component }?.sortedBy { it.app.lowercase() }
         } catch (_: Exception) { null }
     }
     private fun openSettings(action: String) {
@@ -201,6 +209,51 @@ class MainActivity : ComponentActivity() {
             } catch (_: Exception) {
                 main.post { if (!isDestroyed && pickerOpen && generation == pickerGeneration) { loadError = true; loadingApps = false } }
             }
+        }
+    }
+    private fun disableSelectedAccessibility(selected: List<AccessService>) {
+        if (busy || selected.isEmpty()) return
+        try {
+            if (!Shizuku.pingBinder()) { message = "Shizuku não detectado. Inicie-o e escolha os serviços novamente, ou use as configurações do Android."; return }
+            if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+                if (Shizuku.shouldShowRequestPermissionRationale()) message = "Autorize o POCO CONTROL no Shizuku e escolha os serviços novamente."
+                else { Shizuku.requestPermission(31); message = "Autorize o Shizuku e escolha os serviços novamente." }
+                return
+            }
+        } catch (_: Exception) { message = "Não foi possível acessar o Shizuku. Confira os serviços nas configurações."; return }
+        busy = true
+        message = "Tentando desativar somente os serviços escolhidos..."
+        val targets = selected.map { it.component }.toSet()
+        executor.execute {
+            val result = try {
+                val shell = ShellSettings()
+                val raw = shell.readAccessibility()
+                fun components(value: String): List<String>? {
+                    if (value.startsWith("ERROR:")) return null
+                    if (value == "null" || value.isEmpty()) return emptyList()
+                    val parts = value.split(":")
+                    return if (parts.any { ComponentName.unflattenFromString(it) == null }) null else parts
+                }
+                fun canonical(value: String): String? = ComponentName.unflattenFromString(value)?.flattenToString()
+                val before = components(raw)
+                if (before == null) "Não foi possível ler a lista de acessibilidade. Nenhuma alteração foi solicitada."
+                else if (targets.any { target -> before.none { canonical(it) == target } })
+                    "Um serviço escolhido não consta na configuração atual. Nada foi alterado; atualize a verificação e confira nas configurações."
+                else if (shell.readAccessibility() != raw)
+                    "A lista mudou durante a verificação. Nada foi alterado; atualize e tente novamente."
+                else {
+                    val remaining = before.filterNot { canonical(it) in targets }.joinToString(":")
+                    val written = shell.writeAccessibility(remaining)
+                    if (written.startsWith("ERROR:")) "O Android não confirmou a alteração. Confira os serviços nas configurações; a alteração pode ter sido parcial ou incerta."
+                    else {
+                        val after = components(shell.readAccessibility())
+                        if (after == null || after.mapNotNull { canonical(it) }.toSet() != remaining.split(":").filter { it.isNotEmpty() }.mapNotNull { canonical(it) }.toSet())
+                            "Não foi possível confirmar o resultado. Confira cada serviço nas configurações oficiais."
+                        else "A lista de configurações não contém os serviços escolhidos. Confira também a tela de acessibilidade do Android; outros serviços foram mantidos na lista lida."
+                    }
+                }
+            } catch (_: Exception) { "A conexão foi interrompida. O resultado é incerto; confira cada serviço nas configurações do Android." }
+            main.post { if (!isDestroyed) { busy = false; message = result; refreshStatus(); updateConnection() } }
         }
     }
     private fun runOperation(mode: String) {
@@ -278,6 +331,8 @@ private class ShellSettings {
     }
     private fun read(i: Int): String = command("/system/bin/settings", "get", "global", keys[i])
     fun readAll(): String = (0..2).joinToString(",") { read(it) }
+    fun readAccessibility(): String = command("/system/bin/settings", "--user", "current", "get", "secure", "enabled_accessibility_services")
+    fun writeAccessibility(value: String): String = command("/system/bin/settings", "--user", "current", "put", "secure", "enabled_accessibility_services", value)
     fun writeOne(i: Int, value: String): String {
         if (i !in 0..2 || value !in setOf("0", "1", "null")) return "ERROR:invalid"
         val result = if (value == "null") command("/system/bin/settings", "delete", "global", keys[i])
@@ -288,12 +343,13 @@ private class ShellSettings {
 }
 
 @Composable
-fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Boolean, connectionDescription: String, lastTarget: List<String>?, accessibilityServices: List<String>?,
+fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Boolean, connectionDescription: String, lastTarget: List<String>?, accessibilityServices: List<AccessService>?,
     onBank: () -> Unit, onNormal: () -> Unit, onRefresh: () -> Unit, onTest: () -> Unit,
     onSettings: (String) -> Unit, onLaunch: (String, String) -> Unit,
     shortcuts: List<QuickApp>, installedApps: List<QuickApp>, pickerOpen: Boolean,
     loadingApps: Boolean, loadError: Boolean, onShowPicker: () -> Unit, onClosePicker: () -> Unit,
     onAddShortcut: (QuickApp) -> Unit, onRemoveShortcut: (QuickApp) -> Unit,
+    accessDialog: Boolean, onShowAccess: () -> Unit, onCloseAccess: () -> Unit, onDisableAccess: (List<AccessService>) -> Unit,
     confirmMode: String?, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     val dev = listOf(status.developer, status.adb, status.wifiAdb)
     val banner = when { dev.any { it == true } -> "Configurações ativas"; dev.any { it == null } -> "Verificação incompleta"; else -> "Opções verificadas: desativadas" }
@@ -336,7 +392,7 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
                     StatusRow("Depuração sem fio", status.wifiAdb,
                         "Permite comandos de desenvolvimento pela rede. Desativá-la pode interromper a conexão usada para iniciar o Shizuku; reativá-lo pode exigir ações manuais.")
                     StatusRow("Acessibilidade", status.accessibility,
-                        "Serviços de acessibilidade podem apoiar leitores de tela, controle por voz e outras funções. Ativo não significa inseguro. Esta versão não desliga serviços automaticamente; escolha o serviço nas configurações oficiais.", isAccessibility = true)
+                        "Serviços de acessibilidade podem apoiar leitores de tela, controle por voz e outras funções. Ativo não significa inseguro. O modo banco não altera serviços. Use a opção separada de escolha ou as configurações oficiais.", isAccessibility = true)
                     StatusRow("VPN na rede padrão", status.defaultVpn,
                         "Mostra apenas se o Android identifica uma VPN na rede usada pelo aplicativo. Não verifica todas as redes, perfis de VPN ou aplicativos que alteram localização. Indisponível pode significar ausência de rede ou leitura sem resultado.")
                 }
@@ -384,9 +440,11 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
                     when {
                         accessibilityServices == null -> Text("O Android não informou a lista. Abra as configurações para conferir.", color = Amber, fontSize = 13.sp, lineHeight = 19.sp)
                         accessibilityServices.isEmpty() -> Text("O Android não retornou nomes de serviços ativos. Confira nas configurações; esta lista pode ser incompleta.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
-                        else -> accessibilityServices.forEach { Text("• $it", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp) }
+                        else -> accessibilityServices.forEach { Text("• ${it.app} — ${it.service}", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp) }
                     }
-                    Text("A lista é informada pelo Android e pode ser incompleta. Para desativar um serviço, toque em Gerenciar acessibilidade e escolha-o nas configurações. Os modos não alteram acessibilidade.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
+                    Text("O modo banco não altera acessibilidade. A opção abaixo tenta desativar apenas os serviços escolhidos, usando Shizuku. Você também pode gerenciá-los nas configurações.", color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
+                    OutlinedButton(onClick = onShowAccess, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Escolher serviços para desativar") }
+                    Text("Para reativar, use as configurações do Android; o modo normal não restaura serviços de acessibilidade.", color = TextMuted, fontSize = 12.sp, lineHeight = 18.sp)
                     Text("Não desligue serviços essenciais, como leitores de tela, sem uma alternativa para usar o aparelho.", color = Amber, fontSize = 12.sp, lineHeight = 18.sp)
                 }
             }
@@ -404,6 +462,9 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
             }
             Text("Versão experimental • Não afiliado à Xiaomi, CAIXA ou Gov.br", color = Color(0xFF9DAEC7), fontSize = 12.sp)
         }
+        if (accessDialog) {
+            AccessibilityPicker(accessibilityServices, onCloseAccess, onDisableAccess)
+        }
         if (pickerOpen) {
             AppPicker(installedApps, shortcuts, loadingApps, loadError, onClosePicker, onAddShortcut)
         }
@@ -418,6 +479,35 @@ fun PocoScreen(status: DeviceStatus, message: String, ready: Boolean, busy: Bool
         }
     }
 }
+
+@Composable
+private fun AccessibilityPicker(services: List<AccessService>?, onClose: () -> Unit, onDisable: (List<AccessService>) -> Unit) {
+    var chosen by remember { mutableStateOf(setOf<String>()) }
+    val matches = services?.filter {
+        it.component.startsWith("moe.shizuku.privileged.api/") ||
+            listOf("Shizuku-Next", "TogglDev", "ToggleDev", "Tooler").any { name -> it.app.equals(name, ignoreCase = true) }
+    } ?: emptyList()
+    val selected = matches.filter { it.component in chosen }
+    AlertDialog(onDismissRequest = onClose, title = { Text("Desativar serviços escolhidos") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Selecione somente Shizuku-Next, TogglDev e Tooler que deseja desativar. Confira o nome e o serviço de cada item.", fontSize = 13.sp, lineHeight = 19.sp)
+                if (matches.isEmpty()) Text("Nenhum desses serviços foi identificado como ativo. Confira ou desative-os nas configurações do Android.", color = Amber, fontSize = 13.sp)
+                else LazyColumn(Modifier.fillMaxWidth().heightIn(max = 250.dp)) {
+                    items(matches, key = { it.component }) { item ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Checkbox(checked = item.component in chosen, onCheckedChange = { on -> chosen = if (on) chosen + item.component else chosen - item.component })
+                            Column(Modifier.weight(1f)) { Text(item.app, fontSize = 14.sp); Text(item.service, color = TextMuted, fontSize = 12.sp); Text(item.component, color = TextMuted, fontSize = 10.sp, lineHeight = 14.sp) }
+                        }
+                    }
+                }
+                Text("Ao confirmar, o app tentará alterar a lista real do Android. Outros serviços devem permanecer ativos. O Shizuku pode parar e o resultado pode ser parcial. Para reativar, use as configurações do Android; o modo normal não restaura estes serviços.", color = Amber, fontSize = 12.sp, lineHeight = 18.sp)
+            }
+        },
+        confirmButton = { TextButton(onClick = { onDisable(selected) }, enabled = selected.isNotEmpty()) { Text("Tentar desativar") } },
+        dismissButton = { TextButton(onClick = onClose) { Text("Cancelar") } })
+}
+
 @Composable
 private fun ModeCard(title: String, description: String, icon: ImageVector, colors: List<Color>, button: String, enabled: Boolean, onClick: () -> Unit) {
     Column(Modifier.fillMaxWidth().background(Brush.linearGradient(colors), RoundedCornerShape(18.dp)).border(1.dp, Color.White.copy(alpha = .25f), RoundedCornerShape(18.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {

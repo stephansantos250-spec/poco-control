@@ -1,27 +1,14 @@
-# POCO CONTROL — versão 1.9 experimental
+# POCO CONTROL — 2.0 experimental
 
-Aplicativo Android para consultar configurações, tentar alterar opções de desenvolvedor e depuração com Shizuku e orientar o diagnóstico de acesso a aplicativos bancários. Não é afiliado à CAIXA, Xiaomi ou ao Gov.br e não garante acesso aos aplicativos bancários.
+Aplicativo Android experimental, não afiliado à CAIXA, Xiaomi ou Gov.br. Não garante acesso a aplicativos bancários. As alterações de configurações dependem do Android e do Shizuku; o funcionamento não foi testado em um aparelho físico.
 
-## Downloads
-A [versão 1.9 experimental](https://github.com/stephansantos250-spec/poco-control/releases/tag/v1.9.0-experimental) contém o APK e o projeto Android completo em ZIP.
+## Acessibilidade
+Em Ferramentas, **Escolher serviços para desativar** lista serviços ativos identificados como pertencentes a Shizuku-Next, TogglDev/ToggleDev e Tooler. Selecione apenas os serviços desejados e confirme. O app tenta remover só os componentes escolhidos da lista de acessibilidade do Android por meio do Shizuku, preservando os outros componentes lidos. O Android pode restringir a operação ou o Shizuku pode parar, deixando o resultado incerto; confirme cada serviço nas configurações. Se um serviço não aparecer, use as configurações oficiais. A lista pode ser incompleta.
 
-## Instalação e segurança
-O APK usa uma assinatura de teste diferente da 1.8. Atualizar diretamente a partir dela não é possível: desinstalar a versão anterior apaga dados locais, inclusive valores salvos para restauração e atalhos. Antes de desinstalar, anote ou restaure os valores necessários. Não é necessário desinstalar o Shizuku.
+O modo banco não altera acessibilidade. O modo normal não reativa esses serviços: para reativar, use as configurações de acessibilidade do Android. Não desative serviços essenciais de acessibilidade sem uma alternativa para usar o aparelho.
 
-O APK foi compilado, mas não foi testado no aparelho do usuário. O modo banco tenta desativar três configurações e o modo normal tenta restaurar apenas os valores salvos dessas três configurações. Desativar a depuração pode interromper o Shizuku. Os modos não desativam serviços de acessibilidade; eles devem ser gerenciados nas configurações do Android. O diagnóstico pode ser incompleto e não verifica todos os critérios de segurança de bancos.
-
-## Compilação
-Abra o projeto no Android Studio com JDK 17 e Android SDK 35. Sincronize as dependências e compile com `assembleRelease`. A configuração release do projeto utiliza uma chave de depuração local; um APK compilado em outro computador não necessariamente poderá atualizar o APK disponibilizado aqui. Não use chave de depuração em produção.# POCO CONTROL — versão 1.9 experimental
-
-Aplicativo Android para consultar configurações, tentar alterar opções de desenvolvedor e depuração com Shizuku e orientar o diagnóstico de acesso a aplicativos bancários. Não é afiliado à CAIXA, Xiaomi ou ao Gov.br e não garante acesso aos aplicativos bancários.
-
-## Downloads
-A [versão 1.9 experimental](https://github.com/stephansantos250-spec/poco-control/releases/tag/v1.9-experimental) contém o APK e o projeto Android completo em ZIP.
-
-## Instalação e segurança
-O APK usa uma assinatura de teste diferente da 1.8. Atualizar diretamente a partir dela não é possível: desinstalar a versão anterior apaga dados locais, inclusive valores salvos para restauração e atalhos. Antes de desinstalar, anote ou restaure os valores necessários. Não é necessário desinstalar o Shizuku.
-
-O APK foi compilado, mas não foi testado no aparelho do usuário. O modo banco tenta desativar três configurações e o modo normal tenta restaurar apenas os valores salvos dessas três configurações. Desativar a depuração pode interromper o Shizuku. Os modos não desativam serviços de acessibilidade; eles devem ser gerenciados nas configurações do Android. O diagnóstico pode ser incompleto e não verifica todos os critérios de segurança de bancos.
+## Modos e instalação
+O modo banco tenta desativar três configurações de desenvolvedor e depuração, guardando os valores para que o modo normal tente restaurá-los. Outras configurações não são restauradas. Desativar depuração pode interromper o Shizuku. A assinatura do APK 2.0 experimental é de teste e pode ser diferente da anterior; desinstalar o app apaga atalhos e os valores salvos. Anote ou restaure valores importantes antes de desinstalar.
 
 ## Compilação
-Abra o projeto no Android Studio com JDK 17 e Android SDK 35. Sincronize as dependências e compile com `assembleRelease`. A configuração release do projeto utiliza uma chave de depuração local; um APK compilado em outro computador não necessariamente poderá atualizar o APK disponibilizado aqui. Não use chave de depuração em produção.
+Abra o projeto no Android Studio com JDK 17 e Android SDK 35 e execute `assembleRelease`. A versão release usa uma chave de depuração local e não deve ser publicada em produção. O ZIP não contém chaves de assinatura.
