@@ -6,14 +6,14 @@ plugins {
 
 android {
     namespace = "com.pococontrol.app"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.pococontrol.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 14
-        versionName = "2.3-experimental"
+        versionCode = 29
+        versionName = "3.8"
     }
 
     compileOptions {
@@ -21,10 +21,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures { compose = true }
+    packaging { resources.excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF" }
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
             signingConfig = signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
@@ -32,6 +33,10 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
+    implementation("com.flyfishxu:kadb:2.1.3")
+    implementation("org.conscrypt:conscrypt-android:2.5.3")
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
