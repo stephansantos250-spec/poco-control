@@ -1,4 +1,64 @@
-# POCO CONTROL — 3.8
+# POCO CONTROL
+
+<img src="design/icone_realista_original.jpg" alt="Arte do POCO CONTROL: escudo azul com cadeado" width="180" />
+
+**Um aplicativo Android experimental para organizar configurações, serviços de acessibilidade e conexões locais de depuração.**
+
+[Baixar nas releases](https://github.com/stephansantos250-spec/poco-control/releases) · [Conheça os recursos](#recursos) · [Instalação e compilação](#instalação-e-compilação) · [Segurança e limitações](#segurança-e-limitações)
+
+> **Projeto experimental:** não é afiliado à CAIXA, à Xiaomi ou ao Gov.br e não garante acesso a aplicativos bancários. Algumas operações dependem de permissões, do Android, do fabricante e do Shizuku. Confira os resultados nas configurações do aparelho.
+
+## Visão geral
+
+O POCO CONTROL reúne em uma interface opções para consultar aplicativos e serviços de acessibilidade, tentar alterar configurações selecionadas e recuperar estados salvos. Também oferece uma conexão ADB local via Wi-Fi, separada da autorização do Shizuku.
+
+| Informação | Detalhe |
+| --- | --- |
+| Versão do código | 3.8 |
+| Plataforma | Android 8.0 ou superior (API 26+) |
+| Interface | Kotlin e Jetpack Compose |
+| Temas | Liquid Glass e Material 4 |
+| Conexão ADB sem fio | Android 11 ou superior |
+
+## Recursos
+
+- **Três modos:** o modo Poco Control tenta desativar configurações e serviços identificados; o modo Wi-Fi procura preservar a depuração sem fio; o modo normal tenta restaurar estados registrados.
+- **Acessibilidade:** consulte os serviços informados pelo Android e solicite a ativação ou desativação individual, sempre com confirmação e Shizuku autorizado.
+- **Apps instalados:** pesquise e filtre aplicativos do perfil atual e acesse atalhos para telas oficiais de configurações.
+- **Conexão Wi-Fi local:** pareie por código e tente conectar por descoberta ou entrada manual, sem terminal de comandos arbitrários.
+- **Aparência:** escolha entre dois temas e mantenha a preferência salva no aparelho.
+
+Os resultados podem ser parciais e o app não identifica necessariamente todos os serviços ou aplicativos. Consulte as seções detalhadas abaixo antes de usar.
+
+## Como começar
+
+1. Consulte as [releases](https://github.com/stephansantos250-spec/poco-control/releases) para verificar os APKs disponíveis e as orientações de cada versão.
+2. Antes de alterar configurações, anote os estados atuais e mantenha uma forma alternativa de controlar o aparelho.
+3. Quando uma função exigir Shizuku, inicie-o e autorize o POCO CONTROL. Para a conexão ADB sem fio, siga também as instruções de [pareamento e conexão](#fluxo-de-pareamento-inspirado-no-vídeo).
+4. Após cada alteração ou restauração, confira o resultado nas configurações do Android.
+
+**Atualizando?** Uma assinatura diferente impede a instalação sobre a versão anterior. Desinstalar apaga os dados locais, inclusive registros de restauração e chave de pareamento. Restaure ou anote os estados necessários antes de desinstalar; para preservar dados, use a mesma chave da instalação existente.
+
+## Segurança e limitações
+
+- Serviços de acessibilidade podem ler a tela e controlar o aparelho. Ative somente serviços em que confia.
+- A depuração reduz a segurança do aparelho. Ative-a apenas quando necessário e revise as configurações ao terminar.
+- O modo Poco Control pode interromper a conexão sem fio antes de concluir todas as alterações. Se necessário, conclua ou restaure manualmente no Android.
+- A presença de um serviço na lista de configurações não confirma que ele está funcionando. A compatibilidade varia entre versões do Android e fabricantes.
+- O projeto informa que recursos novos, pareamento e comportamento em diferentes aparelhos ainda precisam de testes em dispositivos físicos.
+
+## Navegação
+
+- [Download](#download)
+- [Aparência](#aparência)
+- [Acessibilidade e notificações](#aba-acessibilidade-e-notificações)
+- [Apps instalados e configurações restritas](#apps-instalados-e-configurações-restritas)
+- [Restauração](#restauração)
+- [Instalação e compilação](#instalação-e-compilação)
+- [Conexão Wi-Fi local](#conexão-wi-fi-local-32)
+- [Histórico e detalhes das versões](#versão-38-aparência-e-carregamento)
+
+---
 
 Aplicativo Android experimental, não afiliado à CAIXA, Xiaomi ou Gov.br. Não garante acesso a aplicativos bancários.
 
@@ -7,6 +67,9 @@ Aplicativo Android experimental, não afiliado à CAIXA, Xiaomi ou Gov.br. Não 
 A [versão antiga 2.3](https://github.com/stephansantos250-spec/poco-control/releases/tag/v2.3.0-experimental) permanece disponível. Confira as releases para o APK e o código da versão 3.8.
 
 ## Aparência
+
+<img src="app/src/main/res/drawable-xxxhdpi/ic_launcher_realista.png" alt="Ícone do aplicativo POCO CONTROL" width="96" />
+
 Toque na engrenagem no topo → **Temas** e selecione **Liquid Glass** ou **Material 4**. A escolha fica salva no aparelho. O Liquid Glass usa camadas translúcidas, tons de azul e reflexos suaves, sem exigir desfoque do sistema. Os botões principais são azuis nos dois temas. Material 4 é apenas o nome de um tema inspirado na linguagem Material, não uma versão oficial do Google. O painel foi reorganizado e a pesquisa de aplicativos evita refiltrar a lista sem necessidade; não foram realizados testes de desempenho.
 
 ## Aba Acessibilidade e notificações
