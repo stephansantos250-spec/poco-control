@@ -1,12 +1,26 @@
-# POCO CONTROL
+<div align="center">
+  <img src="design/icone_realista_original.jpg" alt="Escudo azul com cadeado, arte do POCO CONTROL" width="132" />
+  <h1>POCO CONTROL</h1>
+  <p>Um painel Android para acompanhar configurações e serviços de acessibilidade.</p>
+  <p><strong>Android 8+</strong> · <strong>Kotlin &amp; Compose</strong> · <strong>Projeto experimental</strong></p>
+  <p>
+    <a href="https://github.com/stephansantos250-spec/poco-control/releases"><strong>Baixar nas releases</strong></a> ·
+    <a href="#recursos">Recursos</a> ·
+    <a href="#como-começar">Como começar</a> ·
+    <a href="#segurança-e-limitações">Segurança</a>
+  </p>
+</div>
 
-<img src="design/icone_realista_original.jpg" alt="Arte do POCO CONTROL: escudo azul com cadeado" width="180" />
+> **Antes de usar:** algumas ações exigem Shizuku ou conexão ADB autorizada e podem falhar conforme o aparelho. Confira os resultados nas configurações do Android. O projeto não é afiliado à CAIXA, Xiaomi ou Gov.br e não garante acesso a aplicativos bancários.
 
-**Um aplicativo Android experimental para organizar configurações, serviços de acessibilidade e conexões locais de depuração.**
+## O aplicativo
 
-[Baixar nas releases](https://github.com/stephansantos250-spec/poco-control/releases) · [Conheça os recursos](#recursos) · [Instalação e compilação](#instalação-e-compilação) · [Segurança e limitações](#segurança-e-limitações)
+<div align="center">
+  <img src="design/tela-poco-control.svg" alt="Tela real do POCO CONTROL mostrando o modo normal, o aviso de conexão não autorizada e a verificação de segurança" width="250" />
+  <p><em>Captura do vídeo enviado: modo normal e verificação de segurança, com a conexão não autorizada.</em></p>
+</div>
 
-> **Projeto experimental:** não é afiliado à CAIXA, à Xiaomi ou ao Gov.br e não garante acesso a aplicativos bancários. Algumas operações dependem de permissões, do Android, do fabricante e do Shizuku. Confira os resultados nas configurações do aparelho.
+Escolha um modo para tentar ajustar opções do aparelho, consulte serviços de acessibilidade e acompanhe o estado da conexão. O modo normal tenta restaurar os valores que foram salvos anteriormente; o resultado depende das permissões e da conexão disponíveis.
 
 ## Visão geral
 
